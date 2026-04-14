@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Space+Grotesk:wght@300..700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14% 96%;
+    --foreground: 220 20% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 14%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 14%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 92%;
+    --secondary-foreground: 220 20% 14%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 220 14% 92%;
+    --accent-foreground: 220 20% 14%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 217 91% 60%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 38 92% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 220 20% 14%;
+    --sidebar-foreground: 220 14% 80%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 18% 20%;
+    --sidebar-accent-foreground: 220 14% 90%;
+    --sidebar-border: 220 18% 22%;
+    --sidebar-ring: 38 92% 50%;
+    --sidebar-muted: 220 14% 40%;
+
+    --chart-1: 38 92% 50%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 142 71% 45%;
+    --chart-4: 0 72% 51%;
+    --chart-5: 262 83% 58%;
+
+    --font-heading: 'Space Grotesk', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  .dark {
+    --background: 222 20% 10%;
+    --foreground: 220 14% 90%;
+
+    --card: 222 18% 14%;
+    --card-foreground: 220 14% 90%;
+
+    --popover: 222 18% 14%;
+    --popover-foreground: 220 14% 90%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 16% 20%;
+    --secondary-foreground: 220 14% 90%;
+
+    --muted: 220 16% 18%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 220 16% 20%;
+    --accent-foreground: 220 14% 90%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 16% 22%;
+    --input: 220 16% 22%;
+    --ring: 38 92% 50%;
+
+    --sidebar-background: 222 22% 8%;
+    --sidebar-foreground: 220 14% 70%;
+    --sidebar-primary: 38 92% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 20% 14%;
+    --sidebar-accent-foreground: 220 14% 90%;
+    --sidebar-border: 222 20% 16%;
+    --sidebar-ring: 38 92% 50%;
+    --sidebar-muted: 220 14% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
+}
+
+@layer components {
+  .kpi-card {
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm transition-all hover:shadow-md;
+  }
+
+  .module-header {
+    @apply flex flex-col gap-1 mb-6;
+  }
+
+  .module-title {
+    @apply text-2xl font-bold tracking-tight;
+    font-family: var(--font-heading);
+  }
+
+  .module-subtitle {
+    @apply text-muted-foreground text-sm;
+  }
+
+  .data-table {
+    @apply w-full bg-card rounded-xl border border-border overflow-hidden;
+  }
+
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50;
+  }
+
+  .data-table td {
+    @apply px-4 py-3 text-sm border-t border-border;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .status-success {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .status-warning {
+    @apply bg-amber-100 text-amber-800;
+  }
+
+  .status-danger {
+    @apply bg-red-100 text-red-800;
+  }
+
+  .status-info {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .status-neutral {
+    @apply bg-secondary text-secondary-foreground;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  #root, main, .main-content {
+    background-color: white !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  
+  th, td {
+    border: 1px solid #ccc !important;
+  }
+}
