@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, Thermometer, CreditCard,
   Wine, Beer, Receipt, DollarSign, ArrowLeftRight, BarChart3, Settings,
-  Menu, X, LogOut
+  Menu, X, LogOut, Handshake
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -18,6 +18,7 @@ const navItems = [
   { title: 'Expenses', path: '/expenses', icon: Receipt },
   { title: 'Cost', path: '/cost', icon: DollarSign },
   { title: 'Exchange', path: '/exchange', icon: ArrowLeftRight },
+  { title: 'Loans', path: '/loans', icon: Handshake },
   { title: 'Reports', path: '/reports', icon: BarChart3 },
   { title: 'Products', path: '/products', icon: Settings },
 ];

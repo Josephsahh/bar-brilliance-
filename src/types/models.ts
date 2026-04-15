@@ -184,3 +184,39 @@ export interface Exchange {
   status: 'completed' | 'pending';
   createdAt: string;
 }
+
+export type LoanType = 'borrow_in' | 'lend_out';
+export type LoanStatus = 'open' | 'returned' | 'paid' | 'partial';
+export type SettlementType = 'payment' | 'exchange';
+
+export interface LoanTransaction {
+  id: string;
+  loan_date: string;
+  loan_type: LoanType;
+  product_id: string;
+  product_code: string;
+  product_name: string;
+  quantity: number;
+  person_name: string;
+  status: LoanStatus;
+  settlement_type?: SettlementType | null;
+  payment_method?: string | null;
+  receipt_url?: string | null;
+  returned_quantity: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LoanReturn {
+  id: string;
+  loan_transaction_id: string;
+  return_date: string;
+  settlement_type: SettlementType;
+  quantity?: number;
+  amount?: number;
+  payment_method?: string | null;
+  receipt_url?: string | null;
+  notes: string;
+  created_at: string;
+}

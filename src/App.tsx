@@ -21,6 +21,7 @@ import DraftPage from "./pages/DraftPage";
 import ExpensesPage from "./pages/ExpensesPage";
 import CostPage from "./pages/CostPage";
 import ExchangePage from "./pages/ExchangePage";
+import LoanManagementPage from "./pages/LoanManagementPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProductsPage from "./pages/ProductsPage";
 import NotFound from "./pages/NotFound";
@@ -53,6 +54,7 @@ function App() {
                 <Route path="/expenses" element={<ProtectedRoute><AppLayout><ExpensesPage /></AppLayout></ProtectedRoute>} />
                 <Route path="/cost" element={<ProtectedRoute><AppLayout><CostPage /></AppLayout></ProtectedRoute>} />
                 <Route path="/exchange" element={<ProtectedRoute><AppLayout><ExchangePage /></AppLayout></ProtectedRoute>} />
+                <Route path="/loans" element={<ProtectedRoute><AppLayout><LoanManagementPage /></AppLayout></ProtectedRoute>} />
                 <Route path="/reports" element={<ProtectedRoute><AppLayout><ReportsPage /></AppLayout></ProtectedRoute>} />
                 <Route path="/products" element={<ProtectedRoute><AppLayout><ProductsPage /></AppLayout></ProtectedRoute>} />
                 <Route path="*" element={<NotFound />} />
