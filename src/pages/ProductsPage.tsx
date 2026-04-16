@@ -46,6 +46,7 @@ type ProductRow = {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  standing_stock?: { current_quantity: number | null }[] | null;
 };
 
 const categories: Category[] = [
@@ -118,7 +119,7 @@ export default function ProductsPage() {
 
     const { data, error } = await supabase
       .from("products")
-      .select("*")
+      .select("*, standing_stock(current_quantity)")
       .order("id", { ascending: true });
 
     if (error) {
@@ -188,6 +189,8 @@ export default function ProductsPage() {
       updated_at: new Date().toISOString(),
     };
 
+    let savedProductId: number | null = editId;
+
     if (editId) {
       const { error } = await supabase
         .from("products")
@@ -201,18 +204,57 @@ export default function ProductsPage() {
         return;
       }
     } else {
-      const { error } = await supabase.from("products").insert([
+      const { data, error } = await supabase.from("products").insert([
         {
           ...payload,
           is_active: true,
         },
-      ]);
+      ]).select();
 
       if (error) {
         console.error("Add product error:", error);
         alert(`Failed to add product: ${error.message}`);
         setSaving(false);
         return;
+      }
+      if (data && data.length > 0) {
+        savedProductId = data[0].id;
+      }
+    }
+
+    // Sync to standing_stock
+    if (savedProductId) {
+      const isExpected = 
+        payload.standing_target > 0 || 
+        ["beer", "soft_drink", "wine"].includes(payload.category);
+
+      if (isExpected) {
+        // Fetch existing
+        const { data: existingSs } = await supabase
+          .from("standing_stock")
+          .select("id")
+          .eq("product_id", savedProductId)
+          .maybeSingle();
+
+        if (existingSs) {
+          await supabase
+            .from("standing_stock")
+            .update({
+              target_quantity: payload.standing_target,
+              current_quantity: payload.quantity,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingSs.id);
+        } else {
+          await supabase
+            .from("standing_stock")
+            .insert({
+              product_id: savedProductId,
+              target_quantity: payload.standing_target,
+              current_quantity: payload.quantity,
+              updated_at: new Date().toISOString(),
+            });
+        }
       }
     }
 
@@ -412,7 +454,8 @@ export default function ProductsPage() {
               <th>Name</th>
               <th>Category</th>
               <th>Unit</th>
-              <th>Qty</th>
+              <th>Store Qty</th>
+              <th>Total Qty</th>
               <th>Cost</th>
               <th>Sell</th>
               <th>Target</th>
@@ -445,7 +488,10 @@ export default function ProductsPage() {
                     </span>
                   </td>
                   <td>{p.unit}</td>
-                  <td>{p.quantity ?? 0}</td>
+                  <td className="font-medium">{p.quantity ?? 0}</td>
+                  <td className="font-bold text-primary">
+                    {(p.quantity ?? 0) + (p.standing_stock?.[0]?.current_quantity ?? 0)}
+                  </td>
                   <td>ETB {p.cost_price ?? 0}</td>
                   <td>ETB {p.selling_price ?? 0}</td>
                   <td>{p.standing_target ?? 0}</td>

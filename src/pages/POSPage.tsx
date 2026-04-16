@@ -151,7 +151,7 @@ export default function POSPage() {
   const summary = useMemo(() => {
     let totalProducts = 0, totalQty = 0, totalSales = 0, totalCost = 0;
     rows.forEach(r => {
-      const p = products.find(pr => pr.id === r.productId);
+      const p = products.find(pr => String(pr.id) === String(r.productId));
       const qty = Number(r.quantity || 0);
       if (p && qty > 0) {
         totalProducts++;
@@ -162,6 +162,19 @@ export default function POSPage() {
     });
     return { totalProducts, totalQty, totalSales, totalCost, totalProfit: totalSales - totalCost };
   }, [rows, products]);
+
+  const hasValidationError = useMemo(() => {
+    return rows.some(r => {
+      if (!r.productId || !r.quantity) return false;
+      const qty = Number(r.quantity);
+      if (qty <= 0) return false;
+      const p = products.find(pr => String(pr.id) === String(r.productId));
+      const ss = standingStock.find(s => String(s.product_id) === String(r.productId));
+      const standingTarget = ss ? Number(ss.target_quantity ?? p?.standing_target ?? 0) : 0;
+      const maxQty = standingTarget > 0 ? standingTarget : Number(p?.quantity || 0);
+      return qty > maxQty;
+    });
+  }, [rows, products, standingStock]);
 
   const saveBulkEntry = async () => {
     const validRows = rows.filter(r => r.productId && Number(r.quantity) > 0);
@@ -194,10 +207,23 @@ export default function POSPage() {
        if (oldSale) {
          for (const oldItem of oldSale.items) {
            const ss = standingStock.find(s => String(s.product_id) === String(oldItem.productId));
+           const p = products.find(pr => String(pr.id) === String(oldItem.productId));
            if (ss) {
+             const newTarget = Number(ss.target_quantity ?? p?.standing_target ?? 0) + oldItem.quantity;
+
              await supabase.from("standing_stock").update({
-               current_quantity: Number(ss.current_quantity || 0) + oldItem.quantity,
+               target_quantity: newTarget,
              }).eq("product_id", oldItem.productId);
+
+             if (p) {
+               await supabase.from("products").update({
+                 standing_target: newTarget,
+               }).eq("id", oldItem.productId);
+             }
+           } else if (p) {
+             await supabase.from("products").update({
+               quantity: Number(p.quantity || 0) + oldItem.quantity,
+             }).eq("id", oldItem.productId);
            }
          }
        }
@@ -236,13 +262,38 @@ export default function POSPage() {
       }
     }
 
-    // Apply standing stock deductions
+    // Apply standing stock vs inventory deductions
     for (const item of itemsToInsert) {
        const ss = standingStock.find(s => String(s.product_id) === String(item.product_id));
-       if (ss) {
+       const p = products.find(pr => String(pr.id) === String(item.product_id));
+       let qtyToDeduct = item.quantity_sold;
+       let newStandingTarget = ss ? Number(ss.target_quantity ?? p?.standing_target ?? 0) : 0;
+       let newStoreQty = p ? Number(p.quantity || 0) : 0;
+
+       const productUpdates: any = {};
+       let productNeedsUpdate = false;
+
+       if (ss && newStandingTarget > 0) {
+         const deductFromFridge = Math.min(newStandingTarget, qtyToDeduct);
+         newStandingTarget -= deductFromFridge;
+         qtyToDeduct -= deductFromFridge;
+         
          await supabase.from("standing_stock").update({
-           current_quantity: Number(ss.current_quantity || 0) - item.quantity_sold,
+           target_quantity: newStandingTarget,
          }).eq("product_id", item.product_id);
+         
+         productUpdates.standing_target = newStandingTarget;
+         productNeedsUpdate = true;
+       }
+       
+       if (qtyToDeduct > 0 && p) {
+         newStoreQty -= qtyToDeduct;
+         productUpdates.quantity = newStoreQty;
+         productNeedsUpdate = true;
+       }
+       
+       if (productNeedsUpdate && p) {
+         await supabase.from("products").update(productUpdates).eq("id", item.product_id);
        }
     }
 
@@ -267,13 +318,25 @@ export default function POSPage() {
       alert("Cannot delete an expense entry from the sales view. Please use the Expenses page.");
       return;
     }
-    // Reverse standing stock
+    // Reverse standing stock or inventory
     for (const item of sale.items) {
        const ss = standingStock.find(s => String(s.product_id) === String(item.productId));
+       const p = products.find(pr => String(pr.id) === String(item.productId));
        if (ss) {
+         const newTarget = Number(ss.target_quantity ?? p?.standing_target ?? 0) + item.quantity;
          await supabase.from("standing_stock").update({
-           current_quantity: Number(ss.current_quantity || 0) + item.quantity,
+           target_quantity: newTarget,
          }).eq("product_id", item.productId);
+
+         if (p) {
+           await supabase.from("products").update({
+             standing_target: newTarget,
+           }).eq("id", item.productId);
+         }
+       } else if (p) {
+         await supabase.from("products").update({
+           quantity: Number(p.quantity || 0) + item.quantity,
+         }).eq("id", item.productId);
        }
     }
     // Delete batch, items cascade usually but we explicitly delete to be safe
@@ -304,7 +367,7 @@ export default function POSPage() {
             <RotateCcw className="w-4 h-4" /> Reset
           </Button>
           <Button size="sm" className="gap-1.5" onClick={saveBulkEntry}
-            disabled={!rows.some(r => r.productId && Number(r.quantity) > 0)}>
+            disabled={!rows.some(r => r.productId && Number(r.quantity) > 0) || hasValidationError}>
             <Save className="w-4 h-4" /> Save Entries
           </Button>
         </div>
@@ -352,7 +415,7 @@ export default function POSPage() {
                       <TableHead className="w-12">#</TableHead>
                       <TableHead>Product</TableHead>
                       <TableHead className="w-24">Category</TableHead>
-                      <TableHead className="w-24 text-right">Standing</TableHead>
+                      <TableHead className="w-24 text-right">Available</TableHead>
                       <TableHead className="w-28">Qty Sold</TableHead>
                       <TableHead className="w-28 text-right">Unit Price</TableHead>
                       <TableHead className="w-32 text-right">Line Total</TableHead>
@@ -361,12 +424,19 @@ export default function POSPage() {
                   </TableHeader>
                   <TableBody>
                     {rows.map((row, i) => {
-                      const p = products.find(pr => pr.id === row.productId);
+                      const p = products.find(pr => String(pr.id) === String(row.productId));
                       const qty = Number(row.quantity || 0);
-                      const standingQty = row.productId ? getStandingQty(row.productId) : 0;
+                      const ss = standingStock.find(s => String(s.product_id) === String(row.productId));
+                      const standingTarget = ss ? Number(ss.target_quantity ?? p?.standing_target ?? 0) : 0;
+                      const hasStandingStock = standingTarget > 0;
+                      const availableQty = hasStandingStock ? standingTarget : Number(p?.quantity || 0);
+                      const sourceLabel = row.productId ? (hasStandingStock ? 'Standing' : 'Store') : '';
+                      const maxQty = availableQty;
+                      const isOverLimit = qty > maxQty;
+
                       const lineTotal = p && qty > 0 ? qty * Number(p.selling_price || 0) : 0;
-                      const isNeg = standingQty < 0;
-                      const isLow = standingQty > 0 && standingQty < ((p?.standing_target || 0) || 0) * 0.3;
+                      const isNeg = hasStandingStock && standingTarget < 0;
+                      const isLow = hasStandingStock && standingTarget > 0 && standingTarget < ((p?.standing_target || 0) || 0) * 0.3;
                       return (
                         <TableRow key={i}>
                           <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
@@ -384,16 +454,26 @@ export default function POSPage() {
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{p?.category || '—'}</TableCell>
                           <TableCell className={`text-right text-sm font-medium ${isNeg ? 'text-destructive' : isLow ? 'text-warning' : ''}`}>
-                            {row.productId ? standingQty : '—'}
-                            {isNeg && <AlertTriangle className="w-3 h-3 inline ml-1" />}
+                            {row.productId ? (
+                              <div className="flex flex-col items-end leading-tight">
+                                <span>{availableQty} {isNeg && <AlertTriangle className="w-3 h-3 inline ml-1" />}</span>
+                                <span className="text-[10px] text-muted-foreground font-normal">{sourceLabel}</span>
+                              </div>
+                            ) : '—'}
                           </TableCell>
                           <TableCell>
-                            <Input
-                              type="number" min="0" placeholder="0"
-                              value={row.quantity}
-                              onChange={e => updateRow(i, 'quantity', e.target.value)}
-                              className="h-8"
-                            />
+                            <div className="relative">
+                              <Input
+                                type="number" min="0" placeholder="0"
+                                value={row.quantity}
+                                onChange={e => updateRow(i, 'quantity', e.target.value)}
+                                className={`h-8 pr-6 ${isOverLimit ? 'border-destructive focus-visible:ring-destructive text-destructive' : ''}`}
+                              />
+                              {isOverLimit && (
+                                <AlertTriangle className="w-3.5 h-3.5 text-destructive absolute right-2 top-1/2 -translate-y-1/2" />
+                              )}
+                            </div>
+                            {isOverLimit && <p className="text-[10px] text-destructive mt-0.5">Max {maxQty}</p>}
                           </TableCell>
                           <TableCell className="text-right text-sm">{p ? `ETB ${Number(p.selling_price || 0).toLocaleString()}` : '—'}</TableCell>
                           <TableCell className="text-right text-sm font-medium">
@@ -418,7 +498,7 @@ export default function POSPage() {
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={resetRows}>Reset All</Button>
                   <Button size="sm" className="gap-1" onClick={saveBulkEntry}
-                    disabled={!rows.some(r => r.productId && Number(r.quantity) > 0)}>
+                    disabled={!rows.some(r => r.productId && Number(r.quantity) > 0) || hasValidationError}>
                     <Save className="w-3 h-3" /> Save All
                   </Button>
                 </div>
@@ -442,7 +522,7 @@ export default function POSPage() {
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
                 <Button variant="outline" size="sm" onClick={resetRows} className="gap-1 w-full"><RotateCcw className="w-3 h-3" /> Reset</Button>
                 <Button size="sm" onClick={saveBulkEntry} className="gap-1 w-full"
-                  disabled={!rows.some(r => r.productId && Number(r.quantity) > 0)}>
+                  disabled={!rows.some(r => r.productId && Number(r.quantity) > 0) || hasValidationError}>
                   <Save className="w-3 h-3" /> Save
                 </Button>
                 <PrintButton className="w-full" />

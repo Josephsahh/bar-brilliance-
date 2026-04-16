@@ -92,51 +92,69 @@ export default function StandingStockPage() {
   const [refillRows, setRefillRows] = useState<RefillRow[]>([{ productId: "", quantity: "" }]);
   const [showRefill, setShowRefill] = useState(false);
 
-  const loadProducts = async () => {
-    const { data, error } = await supabase
-      .from("products")
-      .select("id, code, name, category, quantity, standing_target")
-      .order("id", { ascending: true });
-
-    if (error) {
-      console.error("Load products error:", error);
-      alert(`Failed to load products: ${error.message}`);
-      return;
-    }
-
-    setProducts((data || []) as ProductRow[]);
-  };
-
-  const loadStandingRows = async () => {
-    const { data, error } = await supabase
-      .from("standing_stock")
-      .select(`
-        id,
-        product_id,
-        target_quantity,
-        current_quantity,
-        updated_at,
-        products (
-          id,
-          code,
-          name,
-          category
-        )
-      `)
-      .order("id", { ascending: true });
-
-    if (error) {
-      console.error("Load standing stock error:", error);
-      alert(`Failed to load standing stock: ${error.message}`);
-      return;
-    }
-
-    setStandingDbRows((data || []) as StandingStockDbRow[]);
-  };
-
   const loadAll = async () => {
     setLoading(true);
-    await Promise.all([loadProducts(), loadStandingRows()]);
+
+    const [prodRes, standRes] = await Promise.all([
+      supabase
+        .from("products")
+        .select("id, code, name, category, quantity, standing_target")
+        .order("id", { ascending: true }),
+      supabase
+        .from("standing_stock")
+        .select(`id, product_id, target_quantity, current_quantity, updated_at, products(id, code, name, category)`)
+        .order("id", { ascending: true })
+    ]);
+
+    if (prodRes.error) {
+      console.error("Load products error:", prodRes.error);
+      alert(`Failed to load products: ${prodRes.error.message}`);
+      setLoading(false);
+      return;
+    }
+
+    if (standRes.error) {
+      console.error("Load standing stock error:", standRes.error);
+      alert(`Failed to load standing stock: ${standRes.error.message}`);
+      setLoading(false);
+      return;
+    }
+
+    const prods = (prodRes.data || []) as ProductRow[];
+    let stands = (standRes.data || []) as StandingStockDbRow[];
+
+    // Ensure standing stock rows
+    const map = new Set(stands.map((s) => s.product_id));
+    const filteredProducts = prods.filter(
+      (p) =>
+        Number(p.standing_target || 0) > 0 ||
+        ["beer", "soft_drink", "wine", "other"].includes((p.category || "").toLowerCase())
+    );
+
+    const missingRows = filteredProducts
+      .filter((p) => !map.has(p.id))
+      .map((p) => ({
+        product_id: p.id,
+        target_quantity: p.standing_target || 0,
+        current_quantity: 0,
+        updated_at: new Date().toISOString(),
+      }));
+
+    if (missingRows.length > 0) {
+      await supabase.from("standing_stock").insert(missingRows);
+      
+      const { data: updatedStand } = await supabase
+        .from("standing_stock")
+        .select(`id, product_id, target_quantity, current_quantity, updated_at, products(id, code, name, category)`)
+        .order("id", { ascending: true });
+        
+      if (updatedStand) {
+        stands = (updatedStand || []) as StandingStockDbRow[];
+      }
+    }
+
+    setProducts(prods);
+    setStandingDbRows(stands);
     setLoading(false);
   };
 
@@ -276,25 +294,36 @@ if (standingUpsertError) {
 
     const newTarget = Number(editForm.target) || row.target;
 
-   const { error } = await supabase
-  .from("standing_stock")
-  .upsert(
-    [
-      {
-        product_id: row.productId,
-        target_quantity: newTarget,
-        current_quantity: row.remainingStanding,
-        updated_at: new Date().toISOString(),
-      },
-    ],
-    { onConflict: "product_id" }
-  );
+    const { error: ssError } = await supabase
+      .from("standing_stock")
+      .upsert(
+        [
+          {
+            product_id: row.productId,
+            target_quantity: newTarget,
+            current_quantity: row.remainingStanding,
+            updated_at: new Date().toISOString(),
+          },
+        ],
+        { onConflict: "product_id" }
+      );
 
-if (error) {
-  console.error("Save target error:", error);
-  alert(`Failed to save target: ${error.message}`);
-  return;
-}
+    if (ssError) {
+      console.error("Save target error:", ssError);
+      alert(`Failed to save target in standing stock: ${ssError.message}`);
+      return;
+    }
+
+    // Also update products table
+    const { error: productError } = await supabase
+      .from("products")
+      .update({ standing_target: newTarget })
+      .eq("id", row.productId);
+
+    if (productError) {
+      console.error("Update product target error:", productError);
+      // Not returning here to still allow UI to refresh the standing stock side
+    }
 
     setEditingId(null);
     setEditForm({ target: "" });
@@ -523,12 +552,10 @@ if (error) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Target</TableHead>
-                  <TableHead className="text-right">Opening</TableHead>
-                  <TableHead className="text-right">Sold</TableHead>
-                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">Fridge Target</TableHead>
+                  <TableHead className="text-right">Store Qty</TableHead>
+                  <TableHead className="text-right">Total Qty</TableHead>
                   <TableHead className="text-right">Refill Needed</TableHead>
-                  <TableHead className="text-right">Inventory</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
@@ -556,7 +583,7 @@ if (error) {
                       return (
                         <TableRow key={ss.id} className="bg-primary/5">
                           <TableCell className="font-medium">{ss.productName}</TableCell>
-                          <TableCell>
+                           <TableCell>
                             <Input
                               type="number"
                               className="h-8 w-20 ml-auto"
@@ -564,13 +591,11 @@ if (error) {
                               onChange={(e) => setEditForm({ target: e.target.value })}
                             />
                           </TableCell>
-                          <TableCell className="text-right">{ss.openingStanding}</TableCell>
-                          <TableCell className="text-right">{ss.quantitySold}</TableCell>
-                          <TableCell className="text-right">{ss.remainingStanding}</TableCell>
+                          <TableCell className="text-right">{ss.inventoryQuantity}</TableCell>
+                          <TableCell className="text-right font-bold text-primary">{ss.remainingStanding + ss.inventoryQuantity}</TableCell>
                           <TableCell className="text-right">
                             {refillNeeded > 0 ? refillNeeded : "—"}
                           </TableCell>
-                          <TableCell className="text-right">{ss.inventoryQuantity}</TableCell>
                           <TableCell>—</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
@@ -595,26 +620,6 @@ if (error) {
                       <TableRow key={ss.id}>
                         <TableCell className="font-medium">{ss.productName}</TableCell>
                         <TableCell className="text-right">{ss.target}</TableCell>
-                        <TableCell className="text-right">{ss.openingStanding}</TableCell>
-                        <TableCell className="text-right">{ss.quantitySold}</TableCell>
-                        <TableCell
-                          className={`text-right font-medium ${
-                            ss.remainingStanding < 0
-                              ? "text-destructive"
-                              : ss.remainingStanding < ss.target * 0.3
-                              ? "text-warning"
-                              : ""
-                          }`}
-                        >
-                          {ss.remainingStanding}
-                        </TableCell>
-                        <TableCell
-                          className={`text-right ${
-                            refillNeeded > 0 ? "font-medium text-warning" : ""
-                          }`}
-                        >
-                          {refillNeeded > 0 ? refillNeeded : "—"}
-                        </TableCell>
                         <TableCell
                           className={`text-right ${
                             inventoryShort ? "text-destructive font-medium" : ""
@@ -622,6 +627,16 @@ if (error) {
                         >
                           {ss.inventoryQuantity}
                           {inventoryShort && <AlertTriangle className="w-3 h-3 inline ml-1" />}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-primary">
+                          {ss.remainingStanding + ss.inventoryQuantity}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right ${
+                            refillNeeded > 0 ? "font-medium text-warning" : ""
+                          }`}
+                        >
+                          {refillNeeded > 0 ? refillNeeded : "—"}
                         </TableCell>
                         <TableCell>
                           <span
