@@ -49,9 +49,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       `}>
         {/* Logo */}
         <div className={`h-16 flex items-center border-b border-sidebar-border ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-5'}`}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary via-primary/80 to-indigo-500 flex flex-shrink-0 items-center justify-center shadow-lg shadow-primary/30 border border-white/10 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500 ease-in-out rounded-xl" />
-            <Crown className="w-5 h-5 text-white drop-shadow-md z-10 transition-transform duration-500 group-hover:scale-110" />
+          <div className="w-9 h-9 rounded-lg bg-primary/20 flex flex-shrink-0 items-center justify-center border border-primary/30">
+            <Crown className="w-5 h-5 text-primary" />
           </div>
           {!isCollapsed && (
             <div className="flex-1 opacity-100 transition-opacity duration-300">
@@ -75,15 +74,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setSidebarOpen(false)}
                 title={isCollapsed ? item.title : undefined}
                 className={`
-                  group flex items-center rounded-xl text-sm font-medium transition-all duration-300 ease-out
+                  flex items-center rounded-lg text-sm font-medium transition-colors duration-200
                   ${isCollapsed ? 'justify-center p-2.5 mx-auto w-10 h-10' : 'gap-3 px-3 py-2.5'}
                   ${active
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20 translate-x-1 lg:translate-x-2'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:translate-x-1 lg:hover:translate-x-2'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                   }
                 `}
               >
-                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-300 ${!active && 'group-hover:scale-110 group-hover:text-primary'}`} />
+                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${!active && 'opacity-80'}`} />
                 {!isCollapsed && <span className="truncate">{item.title}</span>}
               </Link>
             );
