@@ -48,23 +48,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className={`h-16 flex items-center border-b border-sidebar-border ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-5'}`}>
-          <div className="w-9 h-9 rounded-lg bg-primary/20 flex flex-shrink-0 items-center justify-center border border-primary/30">
-            <Crown className="w-5 h-5 text-primary" />
-          </div>
-          {!isCollapsed && (
-            <div className="flex-1 opacity-100 transition-opacity duration-300">
-              <h1 className="text-sm font-bold text-sidebar-accent-foreground font-heading">St Mary Bar</h1>
-              <p className="text-[10px] text-sidebar-muted">Control System</p>
-            </div>
-          )}
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden ml-auto text-sidebar-muted hover:text-sidebar-accent-foreground pr-4">
+        <div className={`relative py-4 flex flex-col items-center justify-center border-b border-sidebar-border transition-all duration-500 overflow-hidden ${isCollapsed ? 'min-h-[64px]' : 'min-h-[140px]'}`}>
+          <img 
+            src="/logo.jpg" 
+            alt="St Mary Bar Logo" 
+            onError={(e) => {
+              // Fallback if logo isn't placed yet
+              (e.target as HTMLImageElement).src = 'https://placehold.co/400x400/111/f59e0b?text=SMB';
+            }}
+            className={`transition-all duration-500 ease-out object-contain mix-blend-screen ${isCollapsed ? 'w-10 h-10' : 'w-32 h-32 hover:scale-105 hover:drop-shadow-[0_0_15px_rgba(245,158,11,0.4)]'}`}
+          />
+          <button onClick={() => setSidebarOpen(false)} className={`lg:hidden absolute top-2 right-2 text-sidebar-muted hover:text-amber-500 transition-colors ${isCollapsed ? 'hidden' : ''}`}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className={`flex-1 overflow-y-auto py-4 space-y-1 ${isCollapsed ? 'px-2' : 'px-3'}`}>
+        <nav className={`flex-1 overflow-y-auto py-4 space-y-1 transition-all duration-300 ${isCollapsed ? 'px-2' : 'px-3'}`}>
           {navItems.map(item => {
             const active = location.pathname === item.path;
             return (
@@ -74,41 +74,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setSidebarOpen(false)}
                 title={isCollapsed ? item.title : undefined}
                 className={`
-                  flex items-center rounded-lg text-sm font-medium transition-colors duration-200
-                  ${isCollapsed ? 'justify-center p-2.5 mx-auto w-10 h-10' : 'gap-3 px-3 py-2.5'}
+                  flex items-center rounded-lg text-sm font-medium transition-all duration-300 overflow-hidden group
+                  ${isCollapsed ? 'justify-center p-2.5 mx-auto w-10 h-10' : 'px-3 py-2.5 w-full'}
                   ${active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+                    ? 'bg-gradient-to-r from-amber-600 to-amber-400 text-white shadow-md shadow-amber-500/30'
+                    : 'text-sidebar-foreground hover:bg-amber-500/10 hover:text-amber-500 hover:translate-x-1'
                   }
                 `}
               >
-                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 ${!active && 'opacity-80'}`} />
-                {!isCollapsed && <span className="truncate">{item.title}</span>}
+                <item.icon className={`w-[18px] h-[18px] flex-shrink-0 transition-transform duration-300 ${active ? 'scale-110 drop-shadow-md' : 'opacity-80 group-hover:scale-110 group-hover:text-amber-500'}`} />
+                <span className={`truncate transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0 ml-0' : 'w-full opacity-100 ml-3'}`}>
+                  {item.title}
+                </span>
               </Link>
             );
           })}
         </nav>
 
         {/* Footer */}
-        <div className={`p-4 border-t border-sidebar-border flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
+        <div className={`p-4 border-t border-sidebar-border flex items-center transition-all duration-300 ${isCollapsed ? 'justify-center px-0' : 'gap-3'}`}>
           <div className="w-8 h-8 flex-shrink-0 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-bold text-sidebar-accent-foreground">
             {user?.email?.charAt(0).toUpperCase() || 'U'}
           </div>
-          {!isCollapsed && (
-            <div className="flex-1 min-w-0 transition-opacity duration-300">
-              <p className="text-xs font-medium text-sidebar-accent-foreground truncate">{user?.email?.split('@')[0] || 'User'}</p>
-              <p className="text-[10px] text-sidebar-muted truncate">{user?.email || 'Logged In'}</p>
-            </div>
-          )}
-          {!isCollapsed && (
-            <button 
-              onClick={() => signOut()}
-              className="text-sidebar-muted hover:text-destructive transition-colors"
-              title="Log Out"
-            >
-              <LogOut className="w-[18px] h-[18px]" />
-            </button>
-          )}
+          <div className={`flex flex-col flex-1 overflow-hidden transition-all duration-300 ${isCollapsed ? 'w-0 opacity-0' : 'w-full opacity-100'}`}>
+            <p className="text-xs font-medium text-sidebar-accent-foreground truncate">{user?.email?.split('@')[0] || 'User'}</p>
+            <p className="text-[10px] text-sidebar-muted truncate">{user?.email || 'Logged In'}</p>
+          </div>
+          <button 
+            onClick={() => signOut()}
+            className={`text-sidebar-muted hover:text-destructive flex-shrink-0 transition-all duration-300 overflow-hidden ${isCollapsed ? 'w-0 opacity-0 m-0 p-0' : 'w-[18px] opacity-100'}`}
+            title="Log Out"
+          >
+            <LogOut className="w-[18px] h-[18px]" />
+          </button>
         </div>
       </aside>
 
@@ -138,8 +136,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto">
-          {children}
+        <main className="flex-1 p-4 lg:p-6 overflow-auto bg-background">
+          <div key={location.pathname} className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ease-out fill-mode-forwards">
+            {children}
+          </div>
         </main>
       </div>
     </div>
