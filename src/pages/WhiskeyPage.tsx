@@ -1333,7 +1333,31 @@ export default function WhiskeyPage() {
                 </div>
               </div>
 
-              <div className="flex gap-2 justify-end">
+              {trackingForm.productId && (
+                <div className="mt-4 bg-success/10 p-4 rounded-lg flex items-center justify-between border border-success/20">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-success-foreground opacity-80">Current Sale Revenue Preview</span>
+                    <span className="text-xs text-muted-foreground mt-1">Live calculation based on your input</span>
+                  </div>
+                  <span className="text-2xl font-bold font-heading text-success">
+                    ETB {
+                      (() => {
+                        const p = whiskeys.find(w => String(w.id) === trackingForm.productId);
+                        if (!p) return 0;
+                        const bottles = Number(trackingForm.bottlesSold) || 0;
+                        const cc = Number(trackingForm.ccSold) || 0;
+                        const ecc = Number(trackingForm.extraCcSold) || 0;
+                        const sellPricePerBottle = Number(p.selling_price || 0);
+                        const sellPricePerCc = Number(p.remaining_ml || 0);
+                        const total = (bottles * sellPricePerBottle) + ((cc + ecc) * sellPricePerCc);
+                        return total.toLocaleString();
+                      })()
+                    }
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end mt-4">
                 <Button
                   variant="outline"
                   onClick={() =>
