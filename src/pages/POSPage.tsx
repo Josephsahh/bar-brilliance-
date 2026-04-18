@@ -334,23 +334,19 @@ export default function POSPage() {
         return;
       }
 
+      if (!window.confirm("Are you sure you want to completely undo this sale? The quantity will be returned to store inventory and the record will be deleted.")) {
+        return;
+      }
+
       for (const item of sale.items) {
-        const ss = standingStock.find(s => String(s.product_id) === String(item.productId));
         const p = products.find(pr => String(pr.id) === String(item.productId));
         const oldQuantity = Number(item.quantity) || 0;
 
-        if (ss) {
-          const { error: ssErr } = await supabase.from("standing_stock").update({
-            current_quantity: Number(ss.current_quantity || 0) + oldQuantity,
-          }).eq("product_id", item.productId);
-          if (ssErr) throw new Error("Standing stock reversal failed: " + ssErr.message);
-        }
-
-        if (p) {
+        if (p && oldQuantity > 0) {
           const { error: pErr } = await supabase.from("products").update({
             quantity: Number(p.quantity || 0) + oldQuantity,
           }).eq("id", item.productId);
-          if (pErr) throw new Error("Total stock reversal failed: " + pErr.message);
+          if (pErr) throw new Error("Store stock reversal failed: " + pErr.message);
         }
       }
 
@@ -361,14 +357,18 @@ export default function POSPage() {
       if (batchErr) throw new Error("Batch delete failed: " + batchErr.message);
 
       if (!bData || bData.length === 0) {
-        throw new Error("UNDO BLOCKED: Database refused to delete the save entry (Likely blocked by Database Security Policies/RLS. You cannot delete sales records).");
+        throw new Error("UNDO BLOCKED: Database refused to delete the save entry. Please run the provided SQL script in Supabase to allow DELETE operations.");
+      }
+
+      if (editingSaleId === sale.id) {
+        setEditingSaleId(null);
+        resetRows();
       }
 
       await loadAll();
     } catch (err: any) {
       console.error("Undo Sale Error:", err);
       alert("Failed to undo sale: " + (err.message || "Unknown error"));
-      throw err;
     }
   };
 
@@ -540,10 +540,9 @@ export default function POSPage() {
                       <>
                         <Button variant="destructive" size="sm" onClick={async () => {
                           const old = sales.find(s => s.id === editingSaleId);
-                          if (old && window.confirm("Are you sure you want to completely undo this sale? Quantities will be returned to inventory.")) {
+                          if (old) {
                             try {
                               await deleteSale(old);
-                              resetRows();
                             } catch (e) { }
                           }
                         }}>
@@ -590,7 +589,7 @@ export default function POSPage() {
                     <p className="text-xs text-muted-foreground mb-2">Saved for {saleDate}:</p>
                     {selectedDateSales.map(s => (
                       <div key={s.id} className="bg-muted/50 rounded-lg p-2 text-xs mb-1.5">
-                        <p className="font-medium">{s.items.map(i => `${i.productName} ×${i.quantity}`).join(', ')}</p>
+                        <p className="font-medium">{s.items.map((i: any) => `${i.productName} ×${i.quantity}`).join(', ')}</p>
                         <p className="text-muted-foreground">ETB {s.total.toLocaleString()} · {s.time}</p>
                         <div className="flex gap-1 mt-1">
                           <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px]" onClick={() => editSale(s)}>

@@ -174,6 +174,7 @@ export default function WhiskeyPage() {
     ccPerBottle: "",
     quantity: "",
     status: "active" as "active" | "inactive",
+    sellType: "both",
   });
 
   const [addOpen, setAddOpen] = useState(false);
@@ -185,6 +186,7 @@ export default function WhiskeyPage() {
     ccPerBottle: String(DEFAULT_CC_PER_BOTTLE),
     bottles: "",
     notes: "",
+    sellType: "both",
   });
 
   const yesterday = new Date();
@@ -486,9 +488,20 @@ export default function WhiskeyPage() {
   }, [whiskeys, whiskeySales]);
 
   const handleAddWhiskey = async () => {
-    if (!addForm.name || !addForm.costPrice || !addForm.sellingPrice) return;
+    if (!addForm.name || !addForm.costPrice) return;
+    if (addForm.sellType !== "cc" && !addForm.sellingPrice) return;
 
     const code = getNextWhiskeyCode();
+
+    let sellingP = Number(addForm.sellingPrice);
+    let sellPPerCc = Number(addForm.sellPricePerCc);
+    let ccPerBot = Number(addForm.ccPerBottle) || DEFAULT_CC_PER_BOTTLE;
+
+    if (addForm.sellType === "bottle") {
+       sellPPerCc = 0;
+    } else if (addForm.sellType === "cc") {
+       sellingP = 0;
+    }
 
     const { error } = await supabase.from("products").insert([
       {
@@ -497,12 +510,12 @@ export default function WhiskeyPage() {
         category: "Whiskey",
         unit: "Bottle",
         cost_price: Number(addForm.costPrice),
-        selling_price: Number(addForm.sellingPrice),
+        selling_price: sellingP,
         quantity: Number(addForm.bottles) || 0,
         reorder_level: 2,
         standing_target: 0,
-        bottle_size: Number(addForm.ccPerBottle) || DEFAULT_CC_PER_BOTTLE,
-        remaining_ml: Number(addForm.sellPricePerCc) || 0,
+        bottle_size: ccPerBot,
+        remaining_ml: sellPPerCc,
         is_active: true,
       },
     ]);
@@ -521,6 +534,7 @@ export default function WhiskeyPage() {
       ccPerBottle: String(DEFAULT_CC_PER_BOTTLE),
       bottles: "",
       notes: "",
+      sellType: "both",
     });
 
     setAddOpen(false);
@@ -528,28 +542,43 @@ export default function WhiskeyPage() {
   };
 
   const openEdit = (p: ProductRow) => {
+    const isBottleOnly = Number(p.selling_price) > 0 && Number(p.remaining_ml) === 0;
+    const isCcOnly = Number(p.selling_price) === 0 && Number(p.remaining_ml) > 0;
+    const sellType = isBottleOnly ? "bottle" : isCcOnly ? "cc" : "both";
+
     setEditProductId(String(p.id));
     setEditForm({
-      name: p.name,
+      name: p.name || "",
       costPrice: String(p.cost_price || 0),
       sellingPrice: String(p.selling_price || 0),
       sellPricePerCc: String(p.remaining_ml || 0),
       ccPerBottle: String(p.bottle_size || DEFAULT_CC_PER_BOTTLE),
       quantity: String(p.quantity || 0),
       status: (p.is_active ?? true) ? "active" : "inactive",
+      sellType
     });
     setEditOpen(true);
   };
 
   const handleEditSave = async () => {
+    let sellingP = Number(editForm.sellingPrice);
+    let sellPPerCc = Number(editForm.sellPricePerCc);
+    let ccPerBot = Number(editForm.ccPerBottle) || DEFAULT_CC_PER_BOTTLE;
+
+    if (editForm.sellType === "bottle") {
+       sellPPerCc = 0;
+    } else if (editForm.sellType === "cc") {
+       sellingP = 0;
+    }
+
     const { error } = await supabase
       .from("products")
       .update({
         name: editForm.name,
         cost_price: Number(editForm.costPrice),
-        selling_price: Number(editForm.sellingPrice),
-        remaining_ml: Number(editForm.sellPricePerCc),
-        bottle_size: Number(editForm.ccPerBottle),
+        selling_price: sellingP,
+        remaining_ml: sellPPerCc,
+        bottle_size: ccPerBot,
         quantity: Number(editForm.quantity),
         is_active: editForm.status === "active",
         updated_at: new Date().toISOString(),
@@ -1166,75 +1195,104 @@ export default function WhiskeyPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {whiskeys.map((w) => {
+            {whiskeys.filter(w => {
               const s = getBottleStatus(w);
+              return !(s.sellPricePerBottle > 0 && s.sellPricePerCc === 0);
+            }).map((w) => {
+              const s = getBottleStatus(w);
+              const isBottleOnly = false; // Filtered out
+              const isCcOnly = s.sellPricePerBottle === 0 && s.sellPricePerCc > 0;
+              const isBoth = !isCcOnly;
+              const modeText = isBoth ? 'Bottle & CC' : 'CC Only';
+
               return (
-                <div key={w.id} className="kpi-card space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-semibold font-heading text-sm">{w.name}</h4>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(w)}>
-                        <Edit2 className="w-3.5 h-3.5" />
+                <div key={w.id} className="bg-card rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden shadow-sm border border-border/50 hover:shadow-md transition-shadow">
+                  {/* Status Badge & Header */}
+                  <div className="flex items-start justify-between border-b border-border/50 pb-3">
+                    <div>
+                      <h4 className="font-semibold font-heading text-lg">{w.name}</h4>
+                      <div className="mt-1.5 inline-flex items-center justify-center px-2 py-0.5 bg-primary/10 text-primary text-[10px] font-bold tracking-wider uppercase rounded">
+                        {modeText}
+                      </div>
+                    </div>
+                    <div className="flex gap-1 bg-muted/40 rounded-lg p-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openEdit(w)}>
+                        <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => openDeleteConfirm(w.id)}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 hover:bg-destructive/10 hover:text-destructive" onClick={() => openDeleteConfirm(w.id)}>
                         <Trash2 className="w-3.5 h-3.5 text-destructive" />
                       </Button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <p className="text-muted-foreground">Full Bottles</p>
-                      <p className="font-bold text-base">{s.fullBottlesLeft}</p>
+                  {/* Dynamic Inner Layout based on Sell Mode */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                    {/* Quantity / Open Bottle */}
+                    <div className="col-span-1 flex flex-col">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Stock (Bottles)</span>
+                      <span className="text-xl font-bold font-heading">{s.fullBottlesLeft}</span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Open Bottle</p>
-                      <p className="font-bold text-base">
-                        {s.isOpenBottle ? `${s.remainingInOpenBottle}/${s.ccPerBottle} cc` : "None"}
-                      </p>
+                    {(!isBottleOnly) && (
+                      <div className="col-span-1 flex flex-col">
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Open Bottle</span>
+                        <span className="text-xl font-bold font-heading">
+                          {s.isOpenBottle ? `${s.remainingInOpenBottle}` : "0"} <span className="text-xs font-normal text-muted-foreground">/ {s.ccPerBottle} cc</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Cost/Bottle */}
+                    <div className="col-span-1 flex flex-col">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Cost / Bottle</span>
+                      <span className="text-sm font-semibold">ETB {s.costPerBottle.toLocaleString()}</span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">CC/Bottle</p>
-                      <p className="font-bold text-base">{s.ccPerBottle}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Bottles Sold</p>
-                      <p className="font-medium">{s.totalBottlesSold}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">CC Sold</p>
-                      <p className="font-medium">{s.totalCcSold}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Extra CC</p>
-                      <p className="font-medium">{s.totalExtraCcSold}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Cost/Bottle</p>
-                      <p className="font-medium">ETB {s.costPerBottle.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Sell/Bottle</p>
-                      <p className="font-medium">ETB {s.sellPricePerBottle.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Sell/CC</p>
-                      <p className="font-medium">ETB {s.sellPricePerCc}</p>
+
+                    {/* Pricing */}
+                    {(isBottleOnly || isBoth) && (
+                      <div className="col-span-1 flex flex-col">
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Sell / Bottle</span>
+                        <span className="text-sm font-semibold">ETB {s.sellPricePerBottle.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(!isBottleOnly) && (
+                      <div className="col-span-1 flex flex-col">
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider mb-0.5">Sell / CC</span>
+                        <span className="text-sm font-semibold">ETB {s.sellPricePerCc.toLocaleString()}</span>
+                      </div>
+                    )}
+                    
+                    {/* Sold summary */}
+                    <div className="col-span-2 flex flex-col gap-1.5 bg-muted/30 p-2.5 rounded-lg border border-border/40">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider border-b border-border/50 pb-1 mb-0.5">Sold Summary</span>
+                      {isBottleOnly || isBoth ? (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground font-medium">Bottles Sold:</span>
+                          <span className="font-bold">{s.totalBottlesSold}</span>
+                        </div>
+                      ) : null}
+                      
+                      {!isBottleOnly ? (
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground font-medium">CC Sold:</span>
+                          <span className="font-bold">{s.totalCcSold + s.totalExtraCcSold}</span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-xs border-t pt-2">
-                    <div>
-                      <p className="text-muted-foreground">Revenue</p>
-                      <p className="font-bold text-success">ETB {s.totalRevenue.toLocaleString()}</p>
+                  {/* Financials Footer */}
+                  <div className="grid grid-cols-3 gap-0 text-center bg-muted/20 border border-border/50 rounded-lg mt-auto overflow-hidden">
+                    <div className="flex flex-col py-2 px-1">
+                       <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Cost</span>
+                       <span className="text-xs font-bold text-destructive">ETB {s.totalCost.toLocaleString()}</span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Cost</p>
-                      <p className="font-bold text-destructive">ETB {s.totalCost.toLocaleString()}</p>
+                    <div className="flex flex-col py-2 px-1 border-x border-border/50 bg-background">
+                       <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest mb-0.5">Revenue</span>
+                       <span className="text-xs font-bold">ETB {s.totalRevenue.toLocaleString()}</span>
                     </div>
-                    <div>
-                      <p className="text-muted-foreground">Profit</p>
-                      <p className="font-bold text-success">ETB {s.totalProfit.toLocaleString()}</p>
+                    <div className="flex flex-col py-2 px-1 bg-success/5">
+                       <span className="text-[9px] text-success/80 font-bold uppercase tracking-widest mb-0.5">Profit</span>
+                       <span className="text-xs font-bold text-success">ETB {s.totalProfit.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -1247,6 +1305,66 @@ export default function WhiskeyPage() {
               </p>
             )}
           </div>
+
+          {(() => {
+             const bottleOnlyWhiskeys = whiskeys.filter(w => {
+               const s = getBottleStatus(w);
+               return s.sellPricePerBottle > 0 && s.sellPricePerCc === 0;
+             });
+
+             if (bottleOnlyWhiskeys.length === 0) return null;
+
+             return (
+               <div className="kpi-card mt-8">
+                 <h3 className="text-sm font-semibold font-heading mb-3 flex items-center gap-2">
+                   Full Bottle Only
+                   <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase rounded-full tracking-wider font-bold">Bottle Only</span>
+                 </h3>
+                 <div className="overflow-x-auto">
+                   <table className="data-table">
+                     <thead>
+                       <tr>
+                         <th>Whiskey Name</th>
+                         <th>Stock</th>
+                         <th>Cost / Btl</th>
+                         <th>Sell / Btl</th>
+                         <th>Sold</th>
+                         <th>Revenue</th>
+                         <th>Profit</th>
+                         <th>Actions</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       {bottleOnlyWhiskeys.map(w => {
+                         const s = getBottleStatus(w);
+                         return (
+                           <tr key={w.id}>
+                             <td className="font-medium">{w.name}</td>
+                             <td className="font-bold text-lg">{s.fullBottlesLeft}</td>
+                             <td>ETB {s.costPerBottle.toLocaleString()}</td>
+                             <td>ETB {s.sellPricePerBottle.toLocaleString()}</td>
+                             <td>{s.totalBottlesSold}</td>
+                             <td className="font-medium">ETB {s.totalRevenue.toLocaleString()}</td>
+                             <td className="font-semibold text-success">ETB {s.totalProfit.toLocaleString()}</td>
+                             <td>
+                               <div className="flex gap-1 justify-end">
+                                 <Button size="sm" variant="ghost" onClick={() => openEdit(w)}>
+                                   <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                 </Button>
+                                 <Button size="sm" variant="ghost" className="hover:text-destructive hover:bg-destructive/10" onClick={() => openDeleteConfirm(w.id)}>
+                                   <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                 </Button>
+                               </div>
+                             </td>
+                           </tr>
+                         );
+                       })}
+                     </tbody>
+                   </table>
+                 </div>
+               </div>
+             );
+          })()}
         </TabsContent>
 
         <TabsContent value="tracking" className="mt-6">
@@ -1876,6 +1994,23 @@ export default function WhiskeyPage() {
 
           <div className="grid gap-4 mt-4">
             <div>
+              <Label>Sell Type</Label>
+              <Select
+                value={addForm.sellType}
+                onValueChange={(v) => setAddForm((f) => ({ ...f, sellType: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bottle">Full Bottle Only</SelectItem>
+                  <SelectItem value="cc">By CC Only</SelectItem>
+                  <SelectItem value="both">Both (Bottle & CC)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
               <Label>Whiskey Name</Label>
               <Input
                 value={addForm.name}
@@ -1893,31 +2028,40 @@ export default function WhiskeyPage() {
                   onChange={(e) => setAddForm((f) => ({ ...f, costPrice: e.target.value }))}
                 />
               </div>
-              <div>
-                <Label>Sell Price Per Bottle</Label>
-                <Input
-                  type="number"
-                  value={addForm.sellingPrice}
-                  onChange={(e) => setAddForm((f) => ({ ...f, sellingPrice: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Sell Price Per CC</Label>
-                <Input
-                  type="number"
-                  value={addForm.sellPricePerCc}
-                  onChange={(e) => setAddForm((f) => ({ ...f, sellPricePerCc: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>CC Per Bottle</Label>
-                <Input
-                  type="number"
-                  value={addForm.ccPerBottle}
-                  onChange={(e) => setAddForm((f) => ({ ...f, ccPerBottle: e.target.value }))}
-                />
-              </div>
-              <div>
+              
+              {addForm.sellType !== "cc" && (
+                <div>
+                  <Label>Sell Price Per Bottle</Label>
+                  <Input
+                    type="number"
+                    value={addForm.sellingPrice}
+                    onChange={(e) => setAddForm((f) => ({ ...f, sellingPrice: e.target.value }))}
+                  />
+                </div>
+              )}
+              
+              {addForm.sellType !== "bottle" && (
+                <>
+                  <div>
+                    <Label>Sell Price Per CC</Label>
+                    <Input
+                      type="number"
+                      value={addForm.sellPricePerCc}
+                      onChange={(e) => setAddForm((f) => ({ ...f, sellPricePerCc: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>CC Per Bottle</Label>
+                    <Input
+                      type="number"
+                      value={addForm.ccPerBottle}
+                      onChange={(e) => setAddForm((f) => ({ ...f, ccPerBottle: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+              
+              <div className={addForm.sellType === "bottle" ? "col-span-2" : ""}>
                 <Label>Initial Bottles</Label>
                 <Input
                   type="number"
@@ -1942,7 +2086,7 @@ export default function WhiskeyPage() {
             </Button>
             <Button
               onClick={handleAddWhiskey}
-              disabled={!addForm.name || !addForm.costPrice || !addForm.sellingPrice}
+              disabled={!addForm.name || !addForm.costPrice || (addForm.sellType !== "cc" && !addForm.sellingPrice)}
             >
               Save
             </Button>
@@ -1957,6 +2101,23 @@ export default function WhiskeyPage() {
           </DialogHeader>
 
           <div className="grid gap-4 mt-4">
+            <div>
+              <Label>Sell Type</Label>
+              <Select
+                value={editForm.sellType}
+                onValueChange={(v) => setEditForm((f) => ({ ...f, sellType: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bottle">Full Bottle Only</SelectItem>
+                  <SelectItem value="cc">By CC Only</SelectItem>
+                  <SelectItem value="both">Both (Bottle & CC)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div>
               <Label>Whiskey Name</Label>
               <Input
@@ -1974,31 +2135,40 @@ export default function WhiskeyPage() {
                   onChange={(e) => setEditForm((f) => ({ ...f, costPrice: e.target.value }))}
                 />
               </div>
-              <div>
-                <Label>Sell Price Per Bottle</Label>
-                <Input
-                  type="number"
-                  value={editForm.sellingPrice}
-                  onChange={(e) => setEditForm((f) => ({ ...f, sellingPrice: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>Sell Price Per CC</Label>
-                <Input
-                  type="number"
-                  value={editForm.sellPricePerCc}
-                  onChange={(e) => setEditForm((f) => ({ ...f, sellPricePerCc: e.target.value }))}
-                />
-              </div>
-              <div>
-                <Label>CC Per Bottle</Label>
-                <Input
-                  type="number"
-                  value={editForm.ccPerBottle}
-                  onChange={(e) => setEditForm((f) => ({ ...f, ccPerBottle: e.target.value }))}
-                />
-              </div>
-              <div>
+              
+              {editForm.sellType !== "cc" && (
+                <div>
+                  <Label>Sell Price Per Bottle</Label>
+                  <Input
+                    type="number"
+                    value={editForm.sellingPrice}
+                    onChange={(e) => setEditForm((f) => ({ ...f, sellingPrice: e.target.value }))}
+                  />
+                </div>
+              )}
+              
+              {editForm.sellType !== "bottle" && (
+                <>
+                  <div>
+                    <Label>Sell Price Per CC</Label>
+                    <Input
+                      type="number"
+                      value={editForm.sellPricePerCc}
+                      onChange={(e) => setEditForm((f) => ({ ...f, sellPricePerCc: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label>CC Per Bottle</Label>
+                    <Input
+                      type="number"
+                      value={editForm.ccPerBottle}
+                      onChange={(e) => setEditForm((f) => ({ ...f, ccPerBottle: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+              
+              <div className={editForm.sellType === "bottle" ? "col-span-2" : ""}>
                 <Label>Current Full Bottle Quantity</Label>
                 <Input
                   type="number"
