@@ -176,7 +176,7 @@ export default function InventoryPage() {
               <th>Product</th>
               <th>Category</th>
               <th>Unit</th>
-              <th>Qty</th>
+              <th>Total Qty</th>
               <th>Cost</th>
               <th>Sell</th>
               <th>Margin</th>

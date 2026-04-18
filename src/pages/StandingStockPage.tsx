@@ -188,7 +188,7 @@ export default function StandingStockPage() {
         openingStanding: current,
         quantitySold: Math.max(0, target - current),
         remainingStanding: current,
-        inventoryQuantity: Number(product.quantity || 0),
+        inventoryQuantity: Math.max(0, Number(product.quantity || 0) - current),
         status: getStatus(current, target),
         date: standing?.updated_at?.split("T")[0] || new Date().toISOString().split("T")[0],
       };
@@ -236,8 +236,9 @@ export default function StandingStockPage() {
 
       if (!ss || !product) continue;
 
-      const inventoryAvailable = Number(product.quantity || 0);
-      const actualRefill = Math.min(refillQty, inventoryAvailable);
+      const totalAvailable = Number(product.quantity || 0);
+      const storeAvailable = Math.max(0, totalAvailable - ss.remainingStanding);
+      const actualRefill = Math.min(refillQty, storeAvailable);
 
       if (actualRefill <= 0) continue;
 
@@ -260,20 +261,6 @@ if (standingUpsertError) {
   alert(`Failed to save standing stock: ${standingUpsertError.message}`);
   return;
 }
-
-      const { error: productError } = await supabase
-        .from("products")
-        .update({
-          quantity: inventoryAvailable - actualRefill,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", productId);
-
-      if (productError) {
-        console.error("Update product inventory error:", productError);
-        alert(`Standing refilled, but failed to reduce inventory: ${productError.message}`);
-        return;
-      }
     }
 
     resetRefill();
@@ -344,7 +331,8 @@ if (standingUpsertError) {
         const ss = standingStock.find((s) => s.productId === Number(r.productId));
         const product = products.find((p) => p.id === Number(r.productId));
         const qty = Number(r.quantity);
-        const invAvailable = Number(product?.quantity || 0);
+        const totalAvailable = Number(product?.quantity || 0);
+        const invAvailable = Math.max(0, totalAvailable - (ss?.remainingStanding || 0));
         const actualRefill = Math.min(qty, invAvailable);
 
         return {
@@ -442,7 +430,8 @@ if (standingUpsertError) {
                   const ss = standingStock.find((s) => s.productId === Number(row.productId));
                   const product = products.find((p) => p.id === Number(row.productId));
                   const qty = Number(row.quantity || 0);
-                  const invAvailable = Number(product?.quantity || 0);
+                  const totalAvailable = Number(product?.quantity || 0);
+                  const invAvailable = Math.max(0, totalAvailable - (ss?.remainingStanding || 0));
                   const recommended = ss ? Math.max(0, ss.target - ss.remainingStanding) : 0;
                   const actualRefill = Math.min(qty, invAvailable);
                   const resultStanding = (ss?.remainingStanding || 0) + actualRefill;

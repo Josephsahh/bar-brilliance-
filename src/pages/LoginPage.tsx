@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,7 @@ export default function LoginPage() {
 
   // Redirect if already logged in
   if (user) {
-    navigate(from, { replace: true });
-    return null;
+    return <Navigate to={from} replace />;
   }
 
   const handleLogin = async (e: React.FormEvent) => {

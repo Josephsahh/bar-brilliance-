@@ -83,6 +83,8 @@ export interface SaleItem {
   costPrice: number;
   total: number;
   profit: number;
+  deducted_from_standing?: number;
+  deducted_from_store?: number;
 }
 
 export interface WhiskeySale {

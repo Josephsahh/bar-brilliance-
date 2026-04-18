@@ -65,8 +65,8 @@ const emptyForm = {
   unit: "Bottle",
   costPrice: "",
   sellingPrice: "",
-  quantity: "0",
-  standingTarget: "",
+  storeQuantity: "0",
+  standingQuantity: "0",
 };
 
 function toDbCategory(category: Category) {
@@ -155,6 +155,9 @@ export default function ProductsPage() {
 
   const openEdit = (p: ProductRow) => {
     setEditId(p.id);
+    const standingQty = p.standing_stock?.[0]?.current_quantity ?? 0;
+    const storeQty = Math.max(0, (p.quantity ?? 0) - standingQty);
+    
     setForm({
       code: p.code || "",
       name: p.name,
@@ -162,8 +165,8 @@ export default function ProductsPage() {
       unit: p.unit || "Bottle",
       costPrice: String(p.cost_price ?? 0),
       sellingPrice: String(p.selling_price ?? 0),
-      quantity: String(p.quantity ?? 0),
-      standingTarget: String(p.standing_target ?? 0),
+      storeQuantity: String(storeQty),
+      standingQuantity: String(standingQty),
     });
     setOpen(true);
   };
@@ -177,6 +180,9 @@ export default function ProductsPage() {
 
     setSaving(true);
 
+    const standingQtyNum = Number(form.standingQuantity || 0);
+    const storeQtyNum = Number(form.storeQuantity || 0);
+
     const payload = {
       code: form.code,
       name: form.name,
@@ -184,8 +190,8 @@ export default function ProductsPage() {
       unit: form.unit || "Bottle",
       cost_price: Number(form.costPrice || 0),
       selling_price: Number(form.sellingPrice || 0),
-      quantity: Number(form.quantity || 0),
-      standing_target: Number(form.standingTarget || 0),
+      quantity: storeQtyNum + standingQtyNum,
+      ...(!editId && { standing_target: standingQtyNum }),
       updated_at: new Date().toISOString(),
     };
 
@@ -225,14 +231,14 @@ export default function ProductsPage() {
     // Sync to standing_stock
     if (savedProductId) {
       const isExpected = 
-        payload.standing_target > 0 || 
-        ["beer", "soft_drink", "wine"].includes(payload.category);
+        standingQtyNum > 0 || 
+        ["beer", "soft_drink", "wine", "other"].includes(payload.category);
 
       if (isExpected) {
         // Fetch existing
         const { data: existingSs } = await supabase
           .from("standing_stock")
-          .select("id")
+          .select("id, target_quantity")
           .eq("product_id", savedProductId)
           .maybeSingle();
 
@@ -240,8 +246,7 @@ export default function ProductsPage() {
           await supabase
             .from("standing_stock")
             .update({
-              target_quantity: payload.standing_target,
-              current_quantity: payload.quantity,
+              current_quantity: standingQtyNum,
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingSs.id);
@@ -250,8 +255,8 @@ export default function ProductsPage() {
             .from("standing_stock")
             .insert({
               product_id: savedProductId,
-              target_quantity: payload.standing_target,
-              current_quantity: payload.quantity,
+              target_quantity: standingQtyNum,
+              current_quantity: standingQtyNum,
               updated_at: new Date().toISOString(),
             });
         }
@@ -416,20 +421,20 @@ export default function ProductsPage() {
               </div>
 
               <div>
-                <Label>Quantity</Label>
+                <Label>Store Quantity</Label>
                 <Input
                   type="number"
-                  value={form.quantity}
-                  onChange={(e) => setForm((f) => ({ ...f, quantity: e.target.value }))}
+                  value={form.storeQuantity}
+                  onChange={(e) => setForm((f) => ({ ...f, storeQuantity: e.target.value }))}
                 />
               </div>
 
               <div>
-                <Label>Standing Target</Label>
+                <Label>Standing Quantity</Label>
                 <Input
                   type="number"
-                  value={form.standingTarget}
-                  onChange={(e) => setForm((f) => ({ ...f, standingTarget: e.target.value }))}
+                  value={form.standingQuantity}
+                  onChange={(e) => setForm((f) => ({ ...f, standingQuantity: e.target.value }))}
                 />
               </div>
             </div>
@@ -455,10 +460,10 @@ export default function ProductsPage() {
               <th>Category</th>
               <th>Unit</th>
               <th>Store Qty</th>
+              <th>Standing Qty</th>
               <th>Total Qty</th>
               <th>Cost</th>
               <th>Sell</th>
-              <th>Target</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -488,13 +493,17 @@ export default function ProductsPage() {
                     </span>
                   </td>
                   <td>{p.unit}</td>
-                  <td className="font-medium">{p.quantity ?? 0}</td>
+                  <td className="font-medium">
+                    {Math.max(0, (p.quantity ?? 0) - (p.standing_stock?.[0]?.current_quantity ?? 0))}
+                  </td>
+                  <td className="font-medium text-muted-foreground">
+                    {p.standing_stock?.[0]?.current_quantity ?? 0}
+                  </td>
                   <td className="font-bold text-primary">
-                    {(p.quantity ?? 0) + (p.standing_stock?.[0]?.current_quantity ?? 0)}
+                    {p.quantity ?? 0}
                   </td>
                   <td>ETB {p.cost_price ?? 0}</td>
                   <td>ETB {p.selling_price ?? 0}</td>
-                  <td>{p.standing_target ?? 0}</td>
                   <td>
                     <span
                       className={`status-badge ${
