@@ -156,7 +156,7 @@ export default function ProductsPage() {
   const openEdit = (p: ProductRow) => {
     setEditId(p.id);
     const standingQty = p.standing_stock?.[0]?.current_quantity ?? 0;
-    const storeQty = Math.max(0, (p.quantity ?? 0) - standingQty);
+    const storeQty = p.quantity ?? 0;
     
     setForm({
       code: p.code || "",
@@ -190,7 +190,7 @@ export default function ProductsPage() {
       unit: form.unit || "Bottle",
       cost_price: Number(form.costPrice || 0),
       selling_price: Number(form.sellingPrice || 0),
-      quantity: storeQtyNum + standingQtyNum,
+      quantity: storeQtyNum,
       ...(!editId && { standing_target: standingQtyNum }),
       updated_at: new Date().toISOString(),
     };
@@ -494,13 +494,13 @@ export default function ProductsPage() {
                   </td>
                   <td>{p.unit}</td>
                   <td className="font-medium">
-                    {Math.max(0, (p.quantity ?? 0) - (p.standing_stock?.[0]?.current_quantity ?? 0))}
+                    {p.quantity ?? 0}
                   </td>
                   <td className="font-medium text-muted-foreground">
                     {p.standing_stock?.[0]?.current_quantity ?? 0}
                   </td>
                   <td className="font-bold text-primary">
-                    {p.quantity ?? 0}
+                    {(p.quantity ?? 0) + (p.standing_stock?.[0]?.current_quantity ?? 0)}
                   </td>
                   <td>ETB {p.cost_price ?? 0}</td>
                   <td>ETB {p.selling_price ?? 0}</td>

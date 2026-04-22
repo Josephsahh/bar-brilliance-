@@ -188,7 +188,7 @@ export default function StandingStockPage() {
         openingStanding: current,
         quantitySold: Math.max(0, target - current),
         remainingStanding: current,
-        inventoryQuantity: Math.max(0, Number(product.quantity || 0) - current),
+        inventoryQuantity: Number(product.quantity || 0),
         status: getStatus(current, target),
         date: standing?.updated_at?.split("T")[0] || new Date().toISOString().split("T")[0],
       };
@@ -225,7 +225,7 @@ export default function StandingStockPage() {
   };
 
   const saveRefill = async () => {
-    const validRows = refillRows.filter((r) => r.productId && Number(r.quantity) > 0);
+    const validRows = refillRows.filter((r) => r.productId && Number(r.quantity) !== 0);
 
     for (const row of validRows) {
       const productId = Number(row.productId);
@@ -236,11 +236,15 @@ export default function StandingStockPage() {
 
       if (!ss || !product) continue;
 
-      const totalAvailable = Number(product.quantity || 0);
-      const storeAvailable = Math.max(0, totalAvailable - ss.remainingStanding);
-      const actualRefill = Math.min(refillQty, storeAvailable);
+      const storeAvailable = Number(product.quantity || 0);
+      
+      let actualRefill = refillQty;
+      if (refillQty > 0) {
+        // Prevent refilling more than what's available in store
+        actualRefill = Math.min(refillQty, storeAvailable);
+      }
 
-      if (actualRefill <= 0) continue;
+      if (actualRefill === 0) continue;
 
 const { error: standingUpsertError } = await supabase
   .from("standing_stock")
@@ -261,6 +265,16 @@ if (standingUpsertError) {
   alert(`Failed to save standing stock: ${standingUpsertError.message}`);
   return;
 }
+
+      const newStoreQty = storeAvailable - actualRefill;
+      const { error: prodErr } = await supabase
+        .from("products")
+        .update({ quantity: newStoreQty })
+        .eq("id", productId);
+
+      if (prodErr) {
+        console.error("Update product error:", prodErr);
+      }
     }
 
     resetRefill();
@@ -326,14 +340,17 @@ if (standingUpsertError) {
 
   const refillSummary = useMemo(() => {
     return refillRows
-      .filter((r) => r.productId && Number(r.quantity) > 0)
+      .filter((r) => r.productId && Number(r.quantity) !== 0)
       .map((r) => {
         const ss = standingStock.find((s) => s.productId === Number(r.productId));
         const product = products.find((p) => p.id === Number(r.productId));
         const qty = Number(r.quantity);
-        const totalAvailable = Number(product?.quantity || 0);
-        const invAvailable = Math.max(0, totalAvailable - (ss?.remainingStanding || 0));
-        const actualRefill = Math.min(qty, invAvailable);
+        const invAvailable = Number(product?.quantity || 0);
+        
+        let actualRefill = qty;
+        if (qty > 0) {
+          actualRefill = Math.min(qty, invAvailable);
+        }
 
         return {
           productId: Number(r.productId),
@@ -344,7 +361,7 @@ if (standingUpsertError) {
           refillQty: qty,
           resultStanding: (ss?.remainingStanding || 0) + actualRefill,
           resultInventory: invAvailable - actualRefill,
-          shortage: qty > invAvailable,
+          shortage: qty > invAvailable && qty > 0,
         };
       });
   }, [refillRows, standingStock, products]);
@@ -397,6 +414,7 @@ if (standingUpsertError) {
             <h3 className="text-sm font-semibold font-heading flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-primary" />
               Bulk Refill from Inventory
+              <span className="text-xs font-normal text-muted-foreground ml-2">(Use negative numbers to reverse past refills)</span>
             </h3>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={autoFillRecommended}>
@@ -430,10 +448,14 @@ if (standingUpsertError) {
                   const ss = standingStock.find((s) => s.productId === Number(row.productId));
                   const product = products.find((p) => p.id === Number(row.productId));
                   const qty = Number(row.quantity || 0);
-                  const totalAvailable = Number(product?.quantity || 0);
-                  const invAvailable = Math.max(0, totalAvailable - (ss?.remainingStanding || 0));
+                  const invAvailable = Number(product?.quantity || 0);
                   const recommended = ss ? Math.max(0, ss.target - ss.remainingStanding) : 0;
-                  const actualRefill = Math.min(qty, invAvailable);
+                  
+                  let actualRefill = qty;
+                  if (qty > 0) {
+                    actualRefill = Math.min(qty, invAvailable);
+                  }
+                  
                   const resultStanding = (ss?.remainingStanding || 0) + actualRefill;
                   const resultInventory = invAvailable - actualRefill;
                   const isShort = qty > invAvailable && qty > 0;
@@ -470,22 +492,21 @@ if (standingUpsertError) {
                       <TableCell>
                         <Input
                           type="number"
-                          min="0"
                           placeholder="0"
                           value={row.quantity}
                           onChange={(e) => updateRefillRow(i, "quantity", e.target.value)}
                           className="h-8"
                         />
                       </TableCell>
-                      <TableCell className="text-right text-sm font-medium text-success">
-                        {row.productId && qty > 0 ? resultStanding : "—"}
+                      <TableCell className={`text-right text-sm font-medium ${qty < 0 ? "text-warning" : "text-success"}`}>
+                        {row.productId && qty !== 0 ? resultStanding : "—"}
                       </TableCell>
                       <TableCell
                         className={`text-right text-sm font-medium ${
                           isShort ? "text-destructive" : ""
                         }`}
                       >
-                        {row.productId && qty > 0 ? resultInventory : "—"}
+                        {row.productId && qty !== 0 ? resultInventory : "—"}
                         {isShort && <AlertTriangle className="w-3 h-3 inline ml-1" />}
                       </TableCell>
                       <TableCell>
@@ -518,7 +539,7 @@ if (standingUpsertError) {
                 size="sm"
                 className="gap-1"
                 onClick={saveRefill}
-                disabled={!refillRows.some((r) => r.productId && Number(r.quantity) > 0)}
+                disabled={!refillRows.some((r) => r.productId && Number(r.quantity) !== 0)}
               >
                 <Save className="w-3 h-3" />
                 Save Refill

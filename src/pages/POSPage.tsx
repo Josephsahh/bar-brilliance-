@@ -280,17 +280,11 @@ export default function POSPage() {
       const p = products.find(pr => String(pr.id) === String(productId));
 
       if (ss) {
-        const newCurrent = Number(ss.current_quantity || 0) + delta;
+        const newCurrent = Number(ss.current_quantity || 0) + delta; // delta is negative when selling
         await supabase.from("standing_stock").update({
           current_quantity: newCurrent,
         }).eq("product_id", productId);
         ss.current_quantity = newCurrent;
-      }
-
-      if (p) {
-        const newTotal = Number(p.quantity || 0) + delta;
-        await supabase.from("products").update({ quantity: newTotal }).eq("id", productId);
-        p.quantity = newTotal;
       }
     }
 
@@ -339,14 +333,14 @@ export default function POSPage() {
       }
 
       for (const item of sale.items) {
-        const p = products.find(pr => String(pr.id) === String(item.productId));
+        const ss = standingStock.find(s => String(s.product_id) === String(item.productId));
         const oldQuantity = Number(item.quantity) || 0;
 
-        if (p && oldQuantity > 0) {
-          const { error: pErr } = await supabase.from("products").update({
-            quantity: Number(p.quantity || 0) + oldQuantity,
-          }).eq("id", item.productId);
-          if (pErr) throw new Error("Store stock reversal failed: " + pErr.message);
+        if (ss && oldQuantity > 0) {
+          const { error: ssErr } = await supabase.from("standing_stock").update({
+            current_quantity: Number(ss.current_quantity || 0) + oldQuantity,
+          }).eq("product_id", item.productId);
+          if (ssErr) throw new Error("Fridge stock reversal failed: " + ssErr.message);
         }
       }
 
