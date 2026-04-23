@@ -400,7 +400,9 @@ export default function DraftPage() {
     let totalProfit = 0;
     drafts.forEach(d => {
       const s = getBermelStatus(d);
-      totalBermelsLeft += s.fullBermelsRemaining + (s.isOpenBermel ? 1 : 0);
+      // Top summary Bermels Remaining uses only the full bermels remaining
+      // (open bermels are not counted as full remaining bermels)
+      totalBermelsLeft += s.fullBermelsRemaining;
       totalNormal += s.totalNormalGlassesSold;
       totalExtra += s.totalExtraGlassesSold;
       totalRev += s.totalRevenue;
@@ -441,6 +443,34 @@ export default function DraftPage() {
       console.error("Save draft sale error:", saleError);
       alert(`Failed to save draft sale: ${saleError.message}`);
       return;
+    }
+
+    // Deduct from product stock
+    let currentRemaining = Number(product.remaining_draft_glasses || 0);
+    let currentBermels = Number(product.quantity || 0);
+
+    let glassesToDeduct = normalGlasses;
+    if (glassesToDeduct <= currentRemaining) {
+      currentRemaining -= glassesToDeduct;
+    } else {
+      glassesToDeduct -= currentRemaining;
+      const bermelsNeeded = Math.ceil(glassesToDeduct / glassesPerBermel);
+      currentBermels = Math.max(0, currentBermels - bermelsNeeded);
+      currentRemaining = (bermelsNeeded * glassesPerBermel) - glassesToDeduct;
+    }
+
+    const { error: productError } = await supabase
+      .from("products")
+      .update({
+        quantity: currentBermels,
+        remaining_draft_glasses: currentRemaining,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", product.id);
+
+    if (productError) {
+      console.error("Product stock update error:", productError);
+      alert(`Sale saved, but failed to adjust stock: ${productError.message}`);
     }
 
     setTrackingForm(f => ({ ...f, normalGlasses: '', extraGlasses: '', notes: '' }));

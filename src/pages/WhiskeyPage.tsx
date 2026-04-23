@@ -1194,17 +1194,10 @@ export default function WhiskeyPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {whiskeys.filter(w => {
+          {(() => {
+            const renderWhiskeyCard = (w: ProductRow, modeText: string, isCcOnly: boolean, isBoth: boolean) => {
               const s = getBottleStatus(w);
-              return !(s.sellPricePerBottle > 0 && s.sellPricePerCc === 0);
-            }).map((w) => {
-              const s = getBottleStatus(w);
-              const isBottleOnly = false; // Filtered out
-              const isCcOnly = s.sellPricePerBottle === 0 && s.sellPricePerCc > 0;
-              const isBoth = !isCcOnly;
-              const modeText = isBoth ? 'Bottle & CC' : 'CC Only';
-
+              const isBottleOnly = false; // By definition for these cards
               return (
                 <div key={w.id} className="bg-card rounded-xl p-4 flex flex-col gap-4 relative overflow-hidden shadow-sm border border-border/50 hover:shadow-md transition-shadow">
                   {/* Status Badge & Header */}
@@ -1297,73 +1290,108 @@ export default function WhiskeyPage() {
                   </div>
                 </div>
               );
-            })}
+            };
 
-            {!loading && whiskeys.length === 0 && (
-              <p className="text-sm text-muted-foreground col-span-2 text-center py-8">
-                No whiskey types added yet. Click "Add Whiskey Type" to start.
-              </p>
-            )}
-          </div>
+            const ccOnlyWhiskeys = whiskeys.filter(w => {
+              const s = getBottleStatus(w);
+              return s.sellPricePerBottle === 0 && s.sellPricePerCc > 0;
+            });
+            const bothWhiskeys = whiskeys.filter(w => {
+              const s = getBottleStatus(w);
+              return s.sellPricePerBottle > 0 && s.sellPricePerCc > 0;
+            });
+            const bottleOnlyWhiskeys = whiskeys.filter(w => {
+              const s = getBottleStatus(w);
+              return s.sellPricePerBottle > 0 && s.sellPricePerCc === 0;
+            });
 
-          {(() => {
-             const bottleOnlyWhiskeys = whiskeys.filter(w => {
-               const s = getBottleStatus(w);
-               return s.sellPricePerBottle > 0 && s.sellPricePerCc === 0;
-             });
+            return (
+              <div className="space-y-8">
+                {/* CC Only Section */}
+                {ccOnlyWhiskeys.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold font-heading mb-3 flex items-center gap-2">
+                      CC Only
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase rounded-full tracking-wider font-bold">CC Only</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {ccOnlyWhiskeys.map(w => renderWhiskeyCard(w, 'CC Only', true, false))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Both Bottle and CC Section */}
+                {bothWhiskeys.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-semibold font-heading mb-3 flex items-center gap-2">
+                      Bottle & CC
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase rounded-full tracking-wider font-bold">Both</span>
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {bothWhiskeys.map(w => renderWhiskeyCard(w, 'Bottle & CC', false, true))}
+                    </div>
+                  </div>
+                )}
 
-             if (bottleOnlyWhiskeys.length === 0) return null;
+                {!loading && whiskeys.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No whiskey types added yet. Click "Add Whiskey Type" to start.
+                  </p>
+                )}
 
-             return (
-               <div className="kpi-card mt-8">
-                 <h3 className="text-sm font-semibold font-heading mb-3 flex items-center gap-2">
-                   Full Bottle Only
-                   <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase rounded-full tracking-wider font-bold">Bottle Only</span>
-                 </h3>
-                 <div className="overflow-x-auto">
-                   <table className="data-table">
-                     <thead>
-                       <tr>
-                         <th>Whiskey Name</th>
-                         <th>Stock</th>
-                         <th>Cost / Btl</th>
-                         <th>Sell / Btl</th>
-                         <th>Sold</th>
-                         <th>Revenue</th>
-                         <th>Profit</th>
-                         <th>Actions</th>
-                       </tr>
-                     </thead>
-                     <tbody>
-                       {bottleOnlyWhiskeys.map(w => {
-                         const s = getBottleStatus(w);
-                         return (
-                           <tr key={w.id}>
-                             <td className="font-medium">{w.name}</td>
-                             <td className="font-bold text-lg">{s.fullBottlesLeft}</td>
-                             <td>ETB {s.costPerBottle.toLocaleString()}</td>
-                             <td>ETB {s.sellPricePerBottle.toLocaleString()}</td>
-                             <td>{s.totalBottlesSold}</td>
-                             <td className="font-medium">ETB {s.totalRevenue.toLocaleString()}</td>
-                             <td className="font-semibold text-success">ETB {s.totalProfit.toLocaleString()}</td>
-                             <td>
-                               <div className="flex gap-1 justify-end">
-                                 <Button size="sm" variant="ghost" onClick={() => openEdit(w)}>
-                                   <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                 </Button>
-                                 <Button size="sm" variant="ghost" className="hover:text-destructive hover:bg-destructive/10" onClick={() => openDeleteConfirm(w.id)}>
-                                   <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                                 </Button>
-                               </div>
-                             </td>
-                           </tr>
-                         );
-                       })}
-                     </tbody>
-                   </table>
-                 </div>
-               </div>
-             );
+                {/* Full Bottle Only Section */}
+                {bottleOnlyWhiskeys.length > 0 && (
+                  <div className="kpi-card">
+                    <h3 className="text-sm font-semibold font-heading mb-3 flex items-center gap-2">
+                      Full Bottle Only
+                      <span className="px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase rounded-full tracking-wider font-bold">Bottle Only</span>
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Whiskey Name</th>
+                            <th>Stock</th>
+                            <th>Cost / Btl</th>
+                            <th>Sell / Btl</th>
+                            <th>Sold</th>
+                            <th>Revenue</th>
+                            <th>Profit</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bottleOnlyWhiskeys.map(w => {
+                            const s = getBottleStatus(w);
+                            return (
+                              <tr key={w.id}>
+                                <td className="font-medium">{w.name}</td>
+                                <td className="font-bold text-lg">{s.fullBottlesLeft}</td>
+                                <td>ETB {s.costPerBottle.toLocaleString()}</td>
+                                <td>ETB {s.sellPricePerBottle.toLocaleString()}</td>
+                                <td>{s.totalBottlesSold}</td>
+                                <td className="font-medium">ETB {s.totalRevenue.toLocaleString()}</td>
+                                <td className="font-semibold text-success">ETB {s.totalProfit.toLocaleString()}</td>
+                                <td>
+                                  <div className="flex gap-1 justify-end">
+                                    <Button size="sm" variant="ghost" onClick={() => openEdit(w)}>
+                                      <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="hover:text-destructive hover:bg-destructive/10" onClick={() => openDeleteConfirm(w.id)}>
+                                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
           })()}
         </TabsContent>
 

@@ -563,6 +563,7 @@ if (standingUpsertError) {
                 <TableRow>
                   <TableHead>Product</TableHead>
                   <TableHead className="text-right">Fridge Target</TableHead>
+                  <TableHead className="text-right">Current Fridge</TableHead>
                   <TableHead className="text-right">Store Qty</TableHead>
                   <TableHead className="text-right">Total Qty</TableHead>
                   <TableHead className="text-right">Refill Needed</TableHead>
@@ -573,13 +574,13 @@ if (standingUpsertError) {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Loading standing stock...
                     </TableCell>
                   </TableRow>
                 ) : standingStock.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No standing stock rows found.
                     </TableCell>
                   </TableRow>
@@ -601,6 +602,7 @@ if (standingUpsertError) {
                               onChange={(e) => setEditForm({ target: e.target.value })}
                             />
                           </TableCell>
+                          <TableCell className="text-right font-medium">{ss.remainingStanding}</TableCell>
                           <TableCell className="text-right">{ss.inventoryQuantity}</TableCell>
                           <TableCell className="text-right font-bold text-primary">{ss.remainingStanding + ss.inventoryQuantity}</TableCell>
                           <TableCell className="text-right">
@@ -629,7 +631,8 @@ if (standingUpsertError) {
                     return (
                       <TableRow key={ss.id}>
                         <TableCell className="font-medium">{ss.productName}</TableCell>
-                        <TableCell className="text-right">{ss.target}</TableCell>
+                        <TableCell className="text-right text-muted-foreground">{ss.target}</TableCell>
+                        <TableCell className="text-right font-medium">{ss.remainingStanding}</TableCell>
                         <TableCell
                           className={`text-right ${
                             inventoryShort ? "text-destructive font-medium" : ""
